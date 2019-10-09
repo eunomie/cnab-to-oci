@@ -5,6 +5,7 @@ import (
 	"github.com/containerd/containerd/remotes"
 	"github.com/deislabs/cnab-go/bundle"
 	"github.com/docker/distribution/reference"
+	"github.com/opencontainers/go-digest"
 	ocischemav1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -14,6 +15,8 @@ const (
 )
 
 func noopEventCallback(FixupEvent) {}
+
+type PushImageCallback func(*bundle.BaseImage) (digest.Digest, error)
 
 // fixupConfig defines the input required for a Fixup operation
 type fixupConfig struct {
@@ -25,6 +28,7 @@ type fixupConfig struct {
 	resolver                      remotes.Resolver
 	invocationImagePlatformFilter platforms.Matcher
 	componentImagePlatformFilter  platforms.Matcher
+	pushImageCallback             PushImageCallback
 }
 
 // FixupOption is a helper for configuring a FixupBundle
@@ -102,6 +106,13 @@ func WithParallelism(maxConcurrentJobs int, jobsBufferLength int) FixupOption {
 	return func(cfg *fixupConfig) error {
 		cfg.maxConcurrentJobs = maxConcurrentJobs
 		cfg.jobsBufferLength = jobsBufferLength
+		return nil
+	}
+}
+
+func WithPushImageCallback(callback PushImageCallback) FixupOption {
+	return func(cfg *fixupConfig) error {
+		cfg.pushImageCallback = callback
 		return nil
 	}
 }

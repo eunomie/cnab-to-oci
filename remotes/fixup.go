@@ -67,7 +67,7 @@ func fixupImage(ctx context.Context, baseImage bundle.BaseImage, cfg fixupConfig
 
 	notifyEvent(FixupEventTypeCopyImageStart, "", nil)
 	// Fixup Base image
-	fixupInfo, err := fixupBaseImage(ctx, &baseImage, cfg.targetRef, cfg.resolver)
+	fixupInfo, err := fixupBaseImage(ctx, &baseImage, cfg.targetRef, cfg.resolver, cfg.pushImageCallback)
 	if err != nil {
 		return notifyError(notifyEvent, err)
 	}
@@ -151,7 +151,8 @@ func fixupPlatforms(ctx context.Context, baseImage *bundle.BaseImage, fixupInfo 
 func fixupBaseImage(ctx context.Context,
 	baseImage *bundle.BaseImage,
 	targetRef reference.Named, //nolint: interfacer
-	resolver remotes.Resolver) (imageFixupInfo, error) {
+	resolver remotes.Resolver,
+	pushImageCallback PushImageCallback) (imageFixupInfo, error) {
 
 	// Check image references
 	if err := checkBaseImage(baseImage); err != nil {
@@ -170,7 +171,15 @@ func fixupBaseImage(ctx context.Context,
 	// Try to fetch the image descriptor
 	_, descriptor, err := resolver.Resolve(ctx, sourceImageRef.String())
 	if err != nil {
-		return imageFixupInfo{}, fmt.Errorf("failed to resolve %q, push the image to the registry before pushing the bundle: %s", sourceImageRef, err)
+		if pushImageCallback != nil {
+			digest, err := pushImageCallback(baseImage)
+			if err != nil {
+				return imageFixupInfo{}, fmt.Errorf("cannot push %q: %v", sourceImageRef, err)
+			}
+			descriptor = ocischemav1.Descriptor{Digest: digest}
+		} else {
+			return imageFixupInfo{}, fmt.Errorf("failed to resolve %q, push the image to the registry before pushing the bundle: %s", sourceImageRef, err)
+		}
 	}
 	digested, err := reference.WithDigest(targetRepoOnly, descriptor.Digest)
 	if err != nil {
